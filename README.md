@@ -14,14 +14,14 @@ omp plugin marketplace add notmike101/personal-agent-plugins
 omp plugin install discord-cdp@personal-agent-plugins
 ```
 
-This repository is private. Authenticate with GitHub before adding it.
+This repository is public; cloning it does not require GitHub authentication.
 If the marketplace is already registered from a local path, keep that
 registration or remove it before switching to the GitHub source.
 
 For a local checkout:
 
 ```powershell
-omp plugin marketplace add D:\omp-plugin-marketplace
+omp plugin marketplace add C:\path\to\personal-agent-plugins
 omp plugin install discord-cdp@personal-agent-plugins
 ```
 
@@ -59,8 +59,8 @@ npm ci --omit=dev --ignore-scripts
 
 Install dependencies separately in each client's installed plugin directory:
 
-- OMP: `~/.omp/plugins/cache/plugins/personal-agent-plugins___discord-cdp___1.0.1`
-- Codex: `~/.codex/plugins/cache/personal-agent-plugins/discord-cdp/1.0.1`
+- OMP: `~/.omp/plugins/cache/plugins/personal-agent-plugins___discord-cdp___1.0.2`
+- Codex: `~/.codex/plugins/cache/personal-agent-plugins/discord-cdp/1.0.2`
 
 Use UI mode by default. The API helper sends a `.` message before the requested
 message to capture authentication headers. Use it only when the user has

@@ -38,7 +38,7 @@ tested unless it was actually exercised. Report validation limits plainly.
 
 ## Privacy and side effects
 
-Keep this repository private. Never commit credentials, tokens, browser
+This repository is public. Never commit credentials, tokens, browser
 profiles, captured authentication headers, screenshots of private content,
 message exports, `.env` files, or `node_modules`.
 

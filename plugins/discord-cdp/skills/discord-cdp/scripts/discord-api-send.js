@@ -126,7 +126,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     browser.disconnect();
     process.exit(1);
   }
-  console.log('Token captured (redacted):', token.slice(0, 20) + '...');
+  console.log('Token captured');
 
   // --- Step 3: send the real message directly via the API ---
   const result = await discord.evaluate(async ({ token, superProps, installId }, channelId, content) => {

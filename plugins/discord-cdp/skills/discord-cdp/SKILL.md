@@ -60,7 +60,7 @@ const box = await discord.evaluate(() => {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
   while (node = walker.nextNode()) {
-    if (node.textContent.trim() === 'DeNial') { // target name
+    if (node.textContent.trim() === '<recipient display name>') { // replace with the target name
       let row = node.parentElement;
       for (let i = 0; i < 8 && row.parentElement; i++) {
         const r = row.getBoundingClientRect();
@@ -168,7 +168,7 @@ const result = await discord.evaluate(async ({ token, superProps, installId }, c
 - The token is short-lived and rotates — re-capture if you get 401.
 - No optimistic UI: the message appears when Discord's gateway pushes it back (~1s).
 - This is the user's real account. Bulk sending risks rate limits (429) or flags. Confirm with the user before bulk use.
-- **Never print or persist the full token** in output — treat it as a secret, use it in-memory only.
+- **Never print or persist any part of the token** in output — treat it as a secret, use it in-memory only.
 
 ## Security notes to tell the user
 
