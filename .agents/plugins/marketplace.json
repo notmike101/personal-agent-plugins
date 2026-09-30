@@ -1,0 +1,20 @@
+{
+  "plugins": [
+    {
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "name": "discord-cdp",
+      "source": {
+        "path": "./plugins/discord-cdp",
+        "source": "local"
+      },
+      "category": "Productivity"
+    }
+  ],
+  "interface": {
+    "displayName": "Personal Agent Plugins"
+  },
+  "name": "personal-agent-plugins"
+}

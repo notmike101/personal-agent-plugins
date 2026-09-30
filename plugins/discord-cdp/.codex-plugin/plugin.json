@@ -1,0 +1,16 @@
+{
+  "version": "1.0.1",
+  "description": "Discord and browser automation through Chrome DevTools Protocol",
+  "name": "discord-cdp",
+  "skills": "./skills/",
+  "interface": {
+    "shortDescription": "Discord and browser automation via CDP",
+    "displayName": "Discord CDP",
+    "category": "Productivity",
+    "developerName": "notmike101",
+    "websiteURL": "https://github.com/notmike101/personal-agent-plugins",
+    "capabilities": [
+      "Instructions"
+    ]
+  }
+}

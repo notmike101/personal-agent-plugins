@@ -1,17 +1,17 @@
-# personal-omp-plugins
+# personal-agent-plugins
 
-Personal plugins for [Oh My Pi](https://github.com/can1357/oh-my-pi).
+Personal plugins for Codex and [Oh My Pi](https://github.com/can1357/oh-my-pi).
 
-The repository is `personal-omp-plugins`. Its OMP marketplace name is
-`omp-plugin-marketplace`, which preserves the existing local installation.
+The repository and marketplace name is `personal-agent-plugins` in both clients.
+Both use the same skill instructions, scripts, and dependencies.
 
 ## Install
 
 Add the GitHub marketplace and install a plugin:
 
 ```powershell
-omp plugin marketplace add notmike101/personal-omp-plugins
-omp plugin install discord-cdp@omp-plugin-marketplace
+omp plugin marketplace add notmike101/personal-agent-plugins
+omp plugin install discord-cdp@personal-agent-plugins
 ```
 
 This repository is private. Authenticate with GitHub before adding it.
@@ -22,10 +22,21 @@ For a local checkout:
 
 ```powershell
 omp plugin marketplace add D:\omp-plugin-marketplace
-omp plugin install discord-cdp@omp-plugin-marketplace
+omp plugin install discord-cdp@personal-agent-plugins
 ```
 
-Restart OMP after installation to load the skill into an existing session.
+For Codex:
+
+```powershell
+codex plugin marketplace add notmike101/personal-agent-plugins
+codex plugin add discord-cdp@personal-agent-plugins
+```
+
+Replace the GitHub source with the absolute checkout path for local installation.
+Restart either client or start a new session after installing.
+
+To migrate the old OMP installation, uninstall `discord-cdp@omp-plugin-marketplace`
+and remove the `omp-plugin-marketplace` marketplace before adding the new one.
 
 ## Plugins
 
@@ -46,9 +57,10 @@ run this inside the installed plugin directory:
 npm ci --omit=dev --ignore-scripts
 ```
 
-OMP stores user-scoped marketplace plugins under
-`~/.omp/plugins/cache/plugins/`. The directory for this release is
-`omp-plugin-marketplace___discord-cdp___1.0.0`.
+Install dependencies separately in each client's installed plugin directory:
+
+- OMP: `~/.omp/plugins/cache/plugins/personal-agent-plugins___discord-cdp___1.0.1`
+- Codex: `~/.codex/plugins/cache/personal-agent-plugins/discord-cdp/1.0.1`
 
 Use UI mode by default. The API helper sends a `.` message before the requested
 message to capture authentication headers. Use it only when the user has
@@ -60,18 +72,23 @@ credentials, browser profiles, captured headers, or private messages.
 
 1. Put the plugin in `plugins/<name>/`, with skills under `skills/<name>/`.
 2. Add `.claude-plugin/plugin.json` with its name, version, and description.
-3. Add an entry to `.omp-plugin/marketplace.json` using a relative source path.
+3. Add entries to `.omp-plugin/marketplace.json` (OMP) and `.agents/plugins/marketplace.json` (Codex), both pointing at the same plugin directory. Add `.codex-plugin/plugin.json` with the same name, version, and skills path as the OMP-compatible manifest.
 4. Declare runtime dependencies in the plugin's `package.json` and commit its lockfile.
-5. Validate the manifests, scripts, and OMP discovery before publishing.
+5. Validate both catalogs and manifests, scripts, and discovery in both clients before publishing. Run `node scripts/check-marketplace.cjs` to check metadata consistency.
 
 For updates, bump the plugin version in its manifest, package files, and
 marketplace entry together. Update the registered marketplace and upgrade the
 installed plugin:
 
 ```powershell
-omp plugin marketplace update omp-plugin-marketplace
-omp plugin upgrade discord-cdp@omp-plugin-marketplace
+omp plugin marketplace update personal-agent-plugins
+omp plugin upgrade discord-cdp@personal-agent-plugins
+codex plugin marketplace upgrade personal-agent-plugins
+codex plugin add discord-cdp@personal-agent-plugins
 ```
 
 The copy in this repository is the maintained plugin source. The original
 Codex skill remains separate.
+
+Catalog formats follow the [Codex plugin documentation](https://developers.openai.com/plugins/build/plugins)
+and [OMP marketplace documentation](https://github.com/can1357/oh-my-pi/blob/main/docs/skills/authoring-marketplaces.md).

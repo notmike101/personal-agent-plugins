@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "version": "1.0.0",
-    "description": "Local OMP plugins"
+    "version": "1.0.1",
+    "description": "Personal plugins for Codex and Oh My Pi"
   },
   "plugins": [
     {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Discord and browser automation through Chrome DevTools Protocol",
       "source": "./plugins/discord-cdp",
       "name": "discord-cdp"
@@ -14,5 +14,5 @@
   "owner": {
     "name": "me"
   },
-  "name": "omp-plugin-marketplace"
+  "name": "personal-agent-plugins"
 }

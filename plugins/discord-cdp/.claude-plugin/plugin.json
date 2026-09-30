@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Discord and browser automation through Chrome DevTools Protocol",
   "name": "discord-cdp",
   "skills": "./skills/"
