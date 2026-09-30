@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "private": true,
+  "name": "discord-cdp",
+  "dependencies": {
+    "puppeteer-core": "25.12.0"
+  }
+}

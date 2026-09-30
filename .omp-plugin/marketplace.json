@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Local OMP plugins"
+  },
+  "plugins": [
+    {
+      "version": "1.0.0",
+      "description": "Discord and browser automation through Chrome DevTools Protocol",
+      "source": "./plugins/discord-cdp",
+      "name": "discord-cdp"
+    }
+  ],
+  "owner": {
+    "name": "me"
+  },
+  "name": "omp-plugin-marketplace"
+}
