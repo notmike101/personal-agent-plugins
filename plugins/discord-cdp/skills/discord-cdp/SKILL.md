@@ -10,15 +10,58 @@ Control the user's **running** Edge/Chrome (with their real logins) by launching
 1. **UI mode** — synthetic clicks + keystrokes through the page. Robust, self-verifying (screenshot), works even when you can't extract auth.
 2. **API mode** — bypass the UI entirely with a direct `fetch()` POST to Discord's REST API using a session token captured from the page. Faster, but the token expires and high volume risks account flags.
 
-Default to UI mode. Use API mode only when the user asks for speed/bulk or UI automation is failing.
+Default to headless operation: do not open a visible browser for sending or reading.
+Use a visible window only for explicitly requested authentication. API mode uses
+the browser session in the background; it does not type the requested message
+into the UI, but the helper sends an additional `.` through the UI to capture
+authentication headers. Obtain authorization for that additional message.
 
 ## Prerequisites
 
-- Node.js with `puppeteer-core` installed in the working directory (`npm install puppeteer-core`). It's a CDP-only client — no browser download.
+- Node.js with the plugin dependencies installed (`npm ci --omit=dev --ignore-scripts` from the plugin root). `puppeteer-core` does not download a browser.
 - The target browser must be **Edge or Chrome** (Chromium-based). Firefox/Safari won't work.
-- Discord web must be open and **logged in** in that browser instance.
+- Authenticate the automation profile once using the helper's `--authenticate` mode. Normal sends launch headless and reuse that profile.
+
+## Headless helper (default)
+
+Run these commands from this skill directory (the folder containing `SKILL.md`):
+
+```bash
+# One-time sign-in: this is the only command that opens a visible window.
+node scripts/discord-api-send.js --authenticate
+
+# Authorized send, including the extra capture dot. Chrome runs headless.
+node scripts/discord-api-send.js "<message>" <channelId> --allow-capture-message
+```
+
+The default persistent profile is
+`~/.config/personal-agent-plugins/discord-cdp/browser-profile`. Both clients
+share it. Use the same `--profile <path>` on authentication and sends to reuse
+a different dedicated automation profile. Do not use the normal browser profile.
+Chrome is detected automatically; use `--executable <path>` for Edge or a custom
+Chrome installation, on both authentication and sends. Optional
+`--expected-title <group-name>` checks the title before sending.
+
+The helper closes its browser on success and failure. Authentication mode
+closes after successful login and sends nothing. If the login expires, a
+headless send stops with instructions to run `--authenticate`; it never opens
+a visible login window automatically. If the profile is already in use, stop
+only that automation browser with user authorization before retrying. The
+helper does not kill other browsers or copy credentials to another profile.
+
+For an existing **headless** browser, a third positional argument can supply
+a loopback CDP endpoint. The helper checks that it is headless, creates and
+closes its own tab, and leaves that external browser running.
+
+An API failure may occur after the dot or requested message was sent. Check
+the channel before retrying to avoid duplicate messages. Authentication headers
+are kept in memory and never logged. The final API message ID and matching
+Discord chat entry are checked before reporting success.
 
 ## Step 0 — Launch the browser with a debug port
+
+The manual steps below are for UI mode or debugging. Keep normal automation
+headless; opening a visible browser must be explicitly requested by the user.
 
 ```bash
 # Windows Edge
@@ -118,7 +161,7 @@ Discord web authenticates with a **session token in the `Authorization` header**
 Run the bundled script (it hooks XHR, triggers one UI send to capture headers, then replays via direct API):
 
 ```bash
-node scripts/discord-api-send.js "<message>" [channelId]
+node scripts/discord-api-send.js "<message>" <channelId> --allow-capture-message
 ```
 
 Or inline, the mechanism is:

@@ -59,14 +59,38 @@ npm ci --omit=dev --ignore-scripts
 
 Install dependencies separately in each client's installed plugin directory:
 
-- OMP: `~/.omp/plugins/cache/plugins/personal-agent-plugins___discord-cdp___1.0.2`
-- Codex: `~/.codex/plugins/cache/personal-agent-plugins/discord-cdp/1.0.2`
+- OMP: `~/.omp/plugins/cache/plugins/personal-agent-plugins___discord-cdp___1.0.3`
+- Codex: `~/.codex/plugins/cache/personal-agent-plugins/discord-cdp/1.0.3`
 
-Use UI mode by default. The API helper sends a `.` message before the requested
+Use headless mode by default. The API helper sends a `.` message before the requested
 message to capture authentication headers. Use it only when the user has
 authorized that additional send. CDP exposes the browser session; keep it
 local and close the automation browser when finished. Never commit session
 credentials, browser profiles, captured headers, or private messages.
+
+From the installed skill directory (`skills/discord-cdp`), authenticate once,
+then send in the background:
+
+```powershell
+node scripts/discord-api-send.js --authenticate
+node scripts/discord-api-send.js "<message>" <channelId> --allow-capture-message
+```
+
+Only `--authenticate` opens a window. Authentication mode sends nothing.
+Normal sends reuse `~/.config/personal-agent-plugins/discord-cdp/browser-profile`
+and close the headless browser afterward. Both agents use the same profile.
+Use `--profile <path>` to reuse another dedicated automation profile and
+`--executable <path>` for Edge or a custom Chrome installation; use the same
+options for authentication and sending. Do not run two processes against one
+profile simultaneously. Expired login causes a clear error, not a visible window.
+
+The requested message is sent through REST; the capture dot uses the background
+UI. The helper validates the target and API response, then checks the returned
+message in Discord. It never automatically retries a send.
+
+Run `node scripts/check-discord-send.cjs` for the headless/authentication and
+input-validation regression check. Live headless API sending was verified;
+visible authentication mode still requires a separate end-to-end test.
 
 ## Add or update a plugin
 

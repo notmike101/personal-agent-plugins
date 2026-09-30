@@ -1,161 +1,148 @@
 #!/usr/bin/env node
-/**
- * discord-api-send.js — send a Discord DM directly via the REST API, bypassing the UI.
- *
- * Usage:
- *   node discord-api-send.js "<message>" [channelId] [browserURL]
- *
- *   message    — text to send (required)
- *   channelId  — DM channel ID (optional; auto-detected from the open Discord tab URL)
- *   browserURL — CDP endpoint (default http://localhost:9222)
- *
- * How it works:
- *   1. Connects to the running browser via puppeteer-core + CDP.
- *   2. Hooks XMLHttpRequest in the Discord page (Discord uses XHR, not fetch).
- *   3. Sends one throwaway UI message ("." ) to trigger a real API call and
- *      capture the Authorization / X-Super-Properties / X-Installation-ID headers.
- *   4. Replays the request directly with fetch() using the target message.
- *
- * Requires: npm install puppeteer-core (in this directory or resolvable from cwd)
- */
+const path = require('node:path');
+const os = require('node:os');
+const { parseArgs } = require('node:util');
 
-const path = require('path');
-
-function loadPuppeteer() {
-  try { return require('puppeteer-core'); } catch (e) {}
-  // Fall back to the skill's own node_modules if installed alongside the script
-  try { return require(path.join(__dirname, 'node_modules', 'puppeteer-core')); } catch (e) {}
-  console.error('puppeteer-core not found. Run: npm install puppeteer-core');
-  process.exit(1);
+function parseOptions(args) {
+  const { values, positionals } = parseArgs({ args, allowPositionals: true, options: {
+    authenticate: { type: 'boolean' },
+    'allow-capture-message': { type: 'boolean' },
+    profile: { type: 'string' },
+    executable: { type: 'string' },
+    'expected-title': { type: 'string' },
+  }});
+  const [message, channelId, browserURL] = positionals;
+  if (positionals.length > 3) throw Error('Too many positional arguments');
+  if (values.authenticate) {
+    if (positionals.length) throw Error('--authenticate cannot send messages or connect to an external browser');
+  } else {
+    if (!message || message.length > 2000) throw Error('Message must contain 1–2000 characters');
+    if (!/^\d{17,20}$/.test(channelId || '')) throw Error('A numeric Discord channel ID is required');
+    if (!values['allow-capture-message']) throw Error('The helper sends an extra dot message. Explicitly authorize it with --allow-capture-message');
+  }
+  if (browserURL) {
+    const url = new URL(browserURL);
+    if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password) {
+      throw Error('CDP endpoint must be an HTTP loopback URL');
+    }
+  }
+  return { ...values, message, channelId, browserURL };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function launchOptions(options) {
+  return {
+    headless: !options.authenticate,
+    userDataDir: path.resolve(options.profile || path.join(os.homedir(), '.config', 'personal-agent-plugins', 'discord-cdp', 'browser-profile')),
+    ...(options.executable ? { executablePath: options.executable } : { channel: 'chrome' }),
+    defaultViewport: { width: 1365, height: 768 },
+  };
+}
 
-(async () => {
-  const [,, message, channelIdArg, browserURL = 'http://localhost:9222'] = process.argv;
-  if (!message) {
-    console.error('Usage: node discord-api-send.js "<message>" [channelId] [browserURL]');
-    process.exit(1);
-  }
-
-  const puppeteer = loadPuppeteer();
-  const browser = await puppeteer.connect({ browserURL });
-  const pages = await browser.pages();
-  const discord = pages.find((p) => p.url().includes('discord.com'));
-  if (!discord) {
-    console.error('No Discord tab found. Open discord.com and log in first.');
-    browser.disconnect();
-    process.exit(1);
-  }
-
-  // Auto-detect channel ID from the current URL if not provided
-  let channelId = channelIdArg;
-  if (!channelId) {
-    const m = discord.url().match(/discord\.com\/channels\/(?:@me|me)\/(\d+)/);
-    if (!m) {
-      console.error('Could not detect channel ID from URL (' + discord.url() + '). Pass it as the 2nd argument.');
-      browser.disconnect();
-      process.exit(1);
+async function main(args = process.argv.slice(2)) {
+  const options = parseOptions(args);
+  const puppeteer = require('puppeteer-core');
+  const owned = !options.browserURL;
+  let browser;
+  let discord;
+  try {
+    browser = owned
+      ? await puppeteer.launch(launchOptions(options))
+      : await puppeteer.connect({ browserURL: options.browserURL });
+    if (!owned) {
+      const session = await browser.target().createCDPSession();
+      const { userAgent } = await session.send('Browser.getVersion');
+      await session.detach();
+      if (!userAgent.includes('HeadlessChrome')) throw Error('External browser must be headless. Restart that automation browser headless before connecting.');
     }
-    channelId = m[1];
-  }
-  console.log('Channel:', channelId);
-
-  // --- Step 1: hook XHR to capture auth headers ---
-  await discord.evaluate(() => {
-    window.__hdrCapture = [];
-    if (window.__hdrHooked) return;
-    const OrigXHR = window.XMLHttpRequest;
-    const origOpen = OrigXHR.prototype.open;
-    const origSetHeader = OrigXHR.prototype.setRequestHeader;
-    const origSend = OrigXHR.prototype.send;
-    OrigXHR.prototype.open = function (m, u) {
-      this.__m = m; this.__u = u; this.__h = {};
-      return origOpen.call(this, m, u);
-    };
-    OrigXHR.prototype.setRequestHeader = function (k, v) {
-      this.__h[k] = v;
-      return origSetHeader.call(this, k, v);
-    };
-    OrigXHR.prototype.send = function (body) {
-      try {
-        if (/\/channels\/\d+\/messages/.test(this.__u || '') && this.__m === 'POST') {
-          window.__hdrCapture.push({ headers: this.__h });
-        }
-      } catch (e) {}
-      return origSend.call(this, body);
-    };
-    window.__hdrHooked = true;
-  });
-
-  // --- Step 2: trigger one UI send to capture headers ---
-  const inputBox = await discord.evaluate(() => {
-    const els = document.querySelectorAll('[contenteditable="true"], [role="textbox"]');
-    for (const el of els) {
-      const r = el.getBoundingClientRect();
-      if (r.y > 300 && r.width > 150) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    // A fresh tab avoids overwriting a user's draft in an existing conversation.
+    discord = await browser.newPage();
+    if (options.authenticate) {
+      console.log('Sign into Discord in this authentication window. It closes after successful login.');
+      await discord.goto('https://discord.com/login', { waitUntil: 'domcontentloaded' });
+      await discord.waitForFunction(() => location.hostname === 'discord.com' && location.pathname.startsWith('/channels/'), { timeout: 300000 });
+      console.log('Authentication complete. Future sends use this profile headless.');
+      return;
     }
-    return null;
-  });
-  if (!inputBox) {
-    console.error('Message input not found. Is the DM chat actually open?');
-    browser.disconnect();
-    process.exit(1);
-  }
+    console.log('Browser mode: headless');
+    const channelURL = `https://discord.com/channels/@me/${options.channelId}`;
+    await discord.goto(channelURL, { waitUntil: 'domcontentloaded' });
+    try {
+      await discord.waitForSelector('[contenteditable="true"][role="textbox"]', { timeout: 20000 });
+    } catch {
+      throw Error('Discord login or channel access required. Run --authenticate with the same --profile and --executable options, then retry. Nothing was sent.');
+    }
+    if (discord.url() !== channelURL) throw Error('Discord channel URL mismatch. Nothing was sent.');
+    if (options['expected-title'] && !(await discord.title()).endsWith(` | ${options['expected-title']}`)) {
+      throw Error('Discord title mismatch. Nothing was sent.');
+    }
+    const input = await discord.$('[contenteditable="true"][role="textbox"]');
+    const draft = await input.evaluate(el => el.textContent.replace(/[\uFEFF\s]/g, ''));
+    if (draft) throw Error('Composer contains a draft. Nothing was sent.');
 
-  await discord.mouse.click(inputBox.x, inputBox.y);
-  await sleep(400);
-  await discord.keyboard.type('.'); // throwaway capture trigger
-  await sleep(300);
-  await discord.keyboard.press('Enter');
-  await sleep(2500);
-
-  const captured = await discord.evaluate(() => window.__hdrCapture);
-  if (!captured || captured.length === 0) {
-    console.error('Failed to capture API headers. The throwaway send may not have gone through.');
-    browser.disconnect();
-    process.exit(1);
-  }
-
-  const h = captured[captured.length - 1].headers;
-  const token = h['Authorization'];
-  const superProps = h['X-Super-Properties'];
-  const installId = h['X-Installation-ID'];
-  if (!token) {
-    console.error('No Authorization header captured. Headers seen:', Object.keys(h).join(', '));
-    browser.disconnect();
-    process.exit(1);
-  }
-  console.log('Token captured');
-
-  // --- Step 3: send the real message directly via the API ---
-  const result = await discord.evaluate(async ({ token, superProps, installId }, channelId, content) => {
-    const resp = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token,
-        'X-Super-Properties': superProps || '',
-        'X-Installation-ID': installId || '',
-      },
-      body: JSON.stringify({ content, nonce: String(Date.now()), tts: false, flags: 0 }),
+    // Capture only this channel's outgoing message headers, and restore XHR afterward.
+    await discord.evaluate(channelId => {
+      const proto = XMLHttpRequest.prototype;
+      const open = proto.open, setHeader = proto.setRequestHeader, send = proto.send;
+      window.__discordCapture = null;
+      proto.open = function(method, url, ...rest) {
+        this.__captureMessage = method.toUpperCase() === 'POST' && String(url).endsWith(`/channels/${channelId}/messages`);
+        this.__captureHeaders = {};
+        return open.call(this, method, url, ...rest);
+      };
+      proto.setRequestHeader = function(key, value) {
+        if (this.__captureMessage) this.__captureHeaders[key.toLowerCase()] = value;
+        return setHeader.call(this, key, value);
+      };
+      proto.send = function(body) {
+        if (this.__captureMessage) window.__discordCapture = this.__captureHeaders;
+        return send.call(this, body);
+      };
+      window.__discordRestore = () => {
+        proto.open = open; proto.setRequestHeader = setHeader; proto.send = send;
+        delete window.__discordCapture; delete window.__discordRestore;
+      };
+    }, options.channelId);
+    await input.click();
+    await discord.keyboard.type('.');
+    await discord.keyboard.press('Enter');
+    console.log('Capture dot submitted through UI');
+    await discord.waitForFunction(() => !!window.__discordCapture?.authorization, { timeout: 15000 });
+    const headers = await discord.evaluate(() => {
+      const captured = window.__discordCapture;
+      window.__discordRestore();
+      return captured;
     });
-    let data = null;
-    try { data = await resp.json(); } catch (e) {}
-    return { status: resp.status, messageId: data && data.id, author: data && data.author && data.author.username };
-  }, { token, superProps, installId }, channelId, message);
-
-  if (result.status === 200) {
-    console.log(`SENT as ${result.author} — message ID ${result.messageId}`);
-  } else {
-    console.error(`FAILED with status ${result.status}`);
-    if (result.status === 401) console.error('Token expired or invalid. Re-run to re-capture.');
-    if (result.status === 429) console.error('Rate limited. Wait and retry.');
-    process.exit(2);
+    console.log('Authentication headers captured (not logged)');
+    const result = await discord.evaluate(async ({ headers, channelId, content }) => {
+      const resp = await fetch(`https://discord.com/api/v9/channels/${channelId}/messages`, {
+        method: 'POST', headers: {
+          'Content-Type': 'application/json',
+          Authorization: headers.authorization,
+          ...(headers['x-super-properties'] ? { 'X-Super-Properties': headers['x-super-properties'] } : {}),
+          ...(headers['x-installation-id'] ? { 'X-Installation-ID': headers['x-installation-id'] } : {}),
+        },
+        body: JSON.stringify({ content, nonce: String(Date.now()), tts: false, flags: 0 }),
+      });
+      const data = await resp.json();
+      return { status: resp.status, messageId: data.id, channelId: data.channel_id, content: data.content };
+    }, { headers, channelId: options.channelId, content: options.message });
+    if (result.status !== 200 || result.channelId !== options.channelId || result.content !== options.message || !result.messageId) {
+      throw Error(`API response did not confirm delivery (HTTP ${result.status}). Do not retry blindly; the dot or requested message may have been sent.`);
+    }
+    console.log(`SENT via API — HTTP ${result.status}, channel ${result.channelId}, message ID ${result.messageId}`);
+    await discord.waitForFunction(({ id, content }) => document.getElementById(`message-content-${id}`)?.textContent === content,
+      { timeout: 15000 }, { id: result.messageId, content: options.message });
+    console.log('Verified the API message in Discord');
+  } finally {
+    if (browser) {
+      if (owned) await browser.close();
+      else {
+        if (discord) await discord.close();
+        await browser.disconnect();
+      }
+    }
   }
+}
 
-  browser.disconnect();
-})().catch((e) => {
-  console.error(e.message);
-  process.exit(1);
-});
+module.exports = { parseOptions, launchOptions };
+if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

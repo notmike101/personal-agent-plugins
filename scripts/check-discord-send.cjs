@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+const { parseOptions, launchOptions } = require('../plugins/discord-cdp/skills/discord-cdp/scripts/discord-api-send.js');
+const send = ['Hello, world', '1263521943093641236', '--allow-capture-message'];
+assert.equal(launchOptions(parseOptions(send)).headless, true);
+assert.equal(launchOptions(parseOptions(['--authenticate'])).headless, false);
+assert.equal(parseOptions(['--authenticate']).message, undefined);
+assert.throws(() => parseOptions(['Hello', '1263521943093641236']), /allow-capture-message/);
+assert.throws(() => parseOptions(['Hello', 'invalid', '--allow-capture-message']), /channel/);
+assert.throws(() => parseOptions(['x'.repeat(2001), '1263521943093641236', '--allow-capture-message']), /2000/);
+assert.throws(() => parseOptions([...send, '--authenticate']), /authenticate/);
+assert.throws(() => parseOptions([...send, 'https://example.com']), /loopback/);
+const options = launchOptions(parseOptions([...send, '--profile', 'work/test-profile', '--executable', 'chrome.exe']));
+assert.equal(options.executablePath, 'chrome.exe');
+assert.equal(options.channel, undefined);
+assert(options.userDataDir.endsWith('test-profile'));
+console.log('Headless defaults, authentication mode, capture consent, and input validation pass.');

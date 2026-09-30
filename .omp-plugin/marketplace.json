@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Personal plugins for Codex and Oh My Pi"
   },
   "plugins": [
     {
-      "version": "1.0.2",
+      "version": "1.0.3",
       "description": "Discord and browser automation through Chrome DevTools Protocol",
       "source": "./plugins/discord-cdp",
       "name": "discord-cdp"
